@@ -7,7 +7,7 @@ from asyncio import Queue, create_task, CancelledError, sleep
 
 """Events could be any type but ints are simple.
 """
-Event = int
+Event = str
 
 """For each event subscribed to, stores a set of the event queues to which the event is to be added
 when it is published.
@@ -40,7 +40,7 @@ def publish(event: Event) -> None:
         event:
             the event to add
     """
-    logging.debug("Publish event %s", event)
+    print(f"Publish event {event}")
 
     for event_queue in _event_subscribers[event]:
         event_queue.put_nowait(event)
@@ -155,7 +155,10 @@ class State:
         Intended to be called by and supplemented with subclass entry behaviour if relevant - for
         actions to be performed by the subclassed state on entry.
         """
-        State._active_states.add(type(self))
+        print(f"Enter {type(self).__name__}")
+
+        if not issubclass(type(self), Machine):
+            State._active_states.add(type(self))
 
     def exit_(self) -> None:
         """Called when the state is exited, by the `exit` task.
@@ -175,6 +178,8 @@ class State:
           - cancels the `do` task (which in turn cancels the `manage` task)
           - call the exit method
         """
+        print(f"Exit {type(self).__name__}")
+
         if self.do_task:
             self.do_task.cancel()
 
@@ -185,7 +190,7 @@ class State:
 
         self.exit_()
 
-        if self in State._active_states:
+        if type(self) in State._active_states:
             State._active_states.remove(type(self))
 
     # default guard
@@ -208,14 +213,13 @@ class State:
         return {state for state in State._active_states}
 
 
-
 class Machine(State):
 
     def __init__(
         self,
         initial: State,
         final: Optional[State] = None,
-        history: Optional[bool] = None,
+        has_history: bool = False,
     ) -> None:
         """Creates the basis of a new state.  Intended to be called from the derived class init.
 
@@ -230,7 +234,7 @@ class Machine(State):
                 initialises the `is final` attribute - default = False
         """
         super().__init__()
-        self.has_history = history
+        self.has_history = has_history
         self.initial: State = initial
         self.final = final
         self.state: State = initial
@@ -262,6 +266,19 @@ class Machine(State):
         await self.state.exit()
         await super().transition_to(new_state, action)
         return new_state
+
+    def enter(self) -> None:
+        """Called when the state is entered.
+
+        Called when the state is entered and performs:
+          - adding to the list of active states
+          - clearing of the event queue so only new events get processed
+
+        Intended to be called by and supplemented with subclass entry behaviour if relevant - for
+        actions to be performed by the subclassed state on entry.
+        """
+        super().enter()
+        self._clear_event_queue()
 
     async def _do(self) -> None:
         self.manage_task = create_task(self.manage())

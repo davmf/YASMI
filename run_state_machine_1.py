@@ -10,44 +10,43 @@ async def main():
     manage_task = create_task(state_machine.manage())
 
     await sleep(DELAY)
-    print(State.active_states())
-    assert State.active_states() == {sm.StateMachineA, sm.StateAA}
+    assert State.active_states() == {sm.StateAA}
 
     publish(sm.Events.EV0)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineB, sm.StateBA}
+    assert State.active_states() == {sm.StateBA}
 
     publish(sm.Events.EV1)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineA, sm.StateAB}
+    assert State.active_states() == {sm.StateAB}
 
     publish(sm.Events.EV1)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineB, sm.StateBA}
+    assert State.active_states() == {sm.StateBA}
 
     publish(sm.Events.EV3)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineB, sm.StateBB}
+    assert State.active_states() == {sm.StateBB}
 
     publish(sm.Events.EV1)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineA, sm.StateAB}
+    assert State.active_states() == {sm.StateAB}
 
     publish(sm.Events.EV0)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineB, sm.StateBB}
+    assert State.active_states() == {sm.StateBB}
 
     publish(sm.Events.EV3)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineA, sm.StateAB}
+    assert State.active_states() == {sm.StateAB}
 
     publish(sm.Events.EV0)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineB, sm.StateBA}
+    assert State.active_states() == {sm.StateBA}
 
     publish(sm.Events.EV1)
     await sleep(DELAY)
-    assert State.active_states() == {sm.StateMachineA, sm.StateAB}
+    assert State.active_states() == {sm.StateAB}
 
     manage_task.cancel()
 
