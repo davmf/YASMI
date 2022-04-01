@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, Set, Optional, Callable, Any, Type
-from asyncio import Queue, create_task, CancelledError, sleep
+from asyncio import Queue, create_task, CancelledError, sleep, Task
 
 
 """Events could be any type but ints are simple.
@@ -40,7 +40,7 @@ def publish(event: Event) -> None:
         event:
             the event to add
     """
-    print(f"Publish event {event}")
+    print(f"Publish {event}")
 
     for event_queue in _event_subscribers[event]:
         event_queue.put_nowait(event)
@@ -113,7 +113,7 @@ class State:
                 initialises the `is final` attribute - default = False
         """
         self.is_final = is_final
-        self.do_task = None
+        self.task: Optional[Task[Any]] = None
         self.name = type(self).__name__
 
     async def transition_to(
@@ -133,80 +133,48 @@ class State:
         Returns:
             the state being transition to as a convenience to the caller
         """
-        await self.exit()
+        if self.task:
+            self.task.cancel()
+
+            try:
+                await self.task
+            except CancelledError:
+                pass
 
         if action:
             action()
 
-        new_state.enter()
-
-        if not new_state.is_final:
-            new_state.do()
+        new_state.run()
 
         return new_state
 
-    def enter(self) -> None:
-        """Called when the state is entered.
+    def run(self) -> None:
+        self.task = create_task(self._run())
 
-        Called when the state is entered and performs:
-          - adding to the list of active states
-          - clearing of the event queue so only new events get processed
+    async def _run(self) -> None:
+        State._active_states.add(type(self))
+        print(f"\tEnter {self.name}")
+        self.enter()
 
-        Intended to be called by and supplemented with subclass entry behaviour if relevant - for
-        actions to be performed by the subclassed state on entry.
-        """
-        print(f"Enter {type(self).__name__}")
-
-        if not issubclass(type(self), Machine):
-            State._active_states.add(type(self))
-
-    def exit_(self) -> None:
-        """Called when the state is exited, by the `exit` task.
-
-        Called when the state is exited and performs:
-          - resetting to the initial state
-
-        Intended to be called by and supplemented with subclass exit behaviour if relevant - for
-        actions to be performed by the subclassed state on exit.
-        """
-        pass
-
-    async def exit(self) -> None:
-        """Coroutine to create a task to manage state exit.
-
-        Manages state exit as follows:
-          - cancels the `do` task (which in turn cancels the `manage` task)
-          - call the exit method
-        """
-        print(f"Exit {type(self).__name__}")
-
-        if self.do_task:
-            self.do_task.cancel()
-
-            try:
-                await self.do_task
-            except CancelledError:
-                pass
-
-        self.exit_()
-
-        if type(self) in State._active_states:
+        # do
+        try:
+            while True:
+                await self.do()
+                await sleep(0)
+        except CancelledError:
+            print(f"\tExit {self.name}")
+            self.exit()
             State._active_states.remove(type(self))
+            raise
 
-    # default guard
-    def guard(self) -> bool:
-        return True
-
-    # default action
-    def action(self) -> None:
+    def enter(self) -> None:
         pass
 
-    async def _do(self) -> None:
-        while True:
-            await sleep(0)
+    async def do(self) -> None:
+        pass
 
-    def do(self) -> None:
-        self.do_task = create_task(self._do())
+    def exit(self) -> None:
+        pass
 
     @staticmethod
     def active_states() -> Set[Type["State"]]:
@@ -230,12 +198,10 @@ class Machine(State):
                 initialises the `initial` attribute - default = None (simple state)
             final:
                 initialises the `final` attribute - default = None (simple state)
-            is_final:
-                initialises the `is final` attribute - default = False
         """
         super().__init__()
-        self.has_history = has_history
-        self.initial: State = initial
+        self._has_history = has_history
+        self._initial: State = initial
         self.final = final
         self.state: State = initial
         self.history_state: Optional[State] = None
@@ -259,56 +225,41 @@ class Machine(State):
             the state being transition to as a convenience to the caller
         """
 
-        self.history_state = (
-            self.state if self.has_history and not self.state.is_final else None
-        )
+        if self._has_history:            
+            self.history_state = self.state if not self.state.is_final else None
 
-        await self.state.exit()
-        await super().transition_to(new_state, action)
+        if self.state.task:
+            self.state.task.cancel()
+
+            try:
+                await self.state.task
+            except CancelledError:
+                pass
+
+        new_state = await super().transition_to(new_state, action)
         return new_state
 
-    def enter(self) -> None:
-        """Called when the state is entered.
-
-        Called when the state is entered and performs:
-          - adding to the list of active states
-          - clearing of the event queue so only new events get processed
-
-        Intended to be called by and supplemented with subclass entry behaviour if relevant - for
-        actions to be performed by the subclassed state on entry.
-        """
-        super().enter()
+    async def _run(self) -> None:
         self._clear_event_queue()
-
-    async def _do(self) -> None:
+        print(f"Enter {type(self).__name__}")
+        self.enter()
         self.manage_task = create_task(self.manage())
 
+        # do
         try:
-            await self.manage_task
+            while True:
+                await self.do()
+                await sleep(0)
         except CancelledError:
             self.manage_task.cancel()
 
             try:
                 await self.manage_task
             except CancelledError:
+                self.exit()
+                print(f"Exit {type(self).__name__}")
+                self.state = self._initial
                 raise
-
-    def exit_(self) -> None:
-        """Called when the state is exited, by the `exit` task.
-
-        Called when the state is exited and performs:
-          - resetting to the initial state
-
-        Intended to be called by and supplemented with subclass exit behaviour if relevant - for
-        actions to be performed by the subclassed state on exit.
-        """
-        super().exit_()
-
-        if self.initial:
-            self.state = self.initial
-
-    def do(self) -> None:
-        self.do_task = create_task(self._do())
 
     async def manage(self) -> None:
         try:
@@ -317,10 +268,6 @@ class Machine(State):
 
         except CancelledError:
             raise
-
-    async def exit(self) -> None:
-        await super().exit()
-        self.exit_()
 
     def _clear_event_queue(self) -> None:
         while not self.event_queue.empty():

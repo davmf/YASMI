@@ -1,0 +1,39 @@
+@startuml state_machine
+
+skinParam lineType ortho
+
+state state_machine {
+    state state_machine_A {
+        state state_AA : entry:\tx += 1
+        state state_AB
+        state c1 <<choice>>
+
+        [*] --> c1
+        c1 --> state_AA : [x = 0]
+        c1 --> state_AB : [x > 1]
+        state_AA --> state_AB : EVENT_1
+        state_AB --> state_AA : EVENT_2
+        state_AB --> [*] : EVENT_1
+    }
+
+    state state_machine_B {
+        state state_BA
+        state state_BB
+
+        [*] --> [H]
+        [H] --> state_BA
+        state_BA --> state_BB : EVENT_3
+        state_BA --> [*] : EVENT_4
+        state_BB --> [*] : EVENT_3
+    }
+
+    [*] --> state_machine_A
+    state_machine_A --> state_machine_B : EVENT_0
+    state_machine_A --> state_machine_B
+    state_machine_B --> state_machine_A : EVENT_1
+    state_machine_B --> state_machine_A
+}
+
+state state_machine
+
+@enduml

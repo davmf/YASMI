@@ -16,11 +16,11 @@ async def main():
     await sleep(DELAY)
     assert State.active_states() == {sm.StateBA}
 
-    publish(sm.Events.EV1)
+    publish(sm.Events.EV4)
     await sleep(DELAY)
     assert State.active_states() == {sm.StateAB}
 
-    publish(sm.Events.EV1)
+    publish(sm.Events.EV0)
     await sleep(DELAY)
     assert State.active_states() == {sm.StateBA}
 

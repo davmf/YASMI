@@ -34,14 +34,12 @@ class StateMachine(Machine):
                 event: Event = await self.event_queue.get()
 
                 if self.state == self.state_machine_A:
-                    if (event == Events.EV0 and self.guard()) or event == Events.EVAf:
-                        self.state = await self.state.transition_to(
-                            self.state_machine_B, self.action
-                        )
+                    if event in {Events.EV0, Events.EVAf}:
+                        self.state = await self.state.transition_to(self.state_machine_B)
                 elif self.state == self.state_machine_B:
-                    if (event == Events.EV1 and self.guard()) or event == Events.EVBf:
+                    if event in {Events.EV1, Events.EVBf}:
                         self.state = await self.state.transition_to(
-                            self.state_machine_A, self.action
+                            self.state_machine_A
                         )
 
         except CancelledError:
@@ -59,6 +57,7 @@ class StateMachineA(Machine):
         subscribe_to({Events.EV1, Events.EV2}, self.event_queue)
 
     async def manage(self):
+        print(f"Start {self.name} manage")
         destination: State = (
             self.history_state if self.history_state
             else self.state_AA if StateMachineA.x == 0 else self.state_AB
@@ -71,15 +70,16 @@ class StateMachineA(Machine):
 
                 if self.state == self.state_AA:
                     if event == Events.EV1:
-                        self.state = await self.state.transition_to(self.state_AB, self.action)
+                        self.state = await self.state.transition_to(self.state_AB)
                 elif self.state == self.state_AB:
                     if event == Events.EV1:
-                        self.state = await self.state.transition_to(self.final, self.action)
+                        self.state = await self.state.transition_to(self.final)
                     elif event == Events.EV2:
-                        self.state = await self.state.transition_to(self.state_AA, self.action)
+                        self.state = await self.state.transition_to(self.state_AA)
 
         except CancelledError:
-            pass
+            print(f"End {self.name} manage")
+            raise
 
 
 class StateMachineB(Machine):
@@ -101,15 +101,15 @@ class StateMachineB(Machine):
 
                     if self.state == self.state_BA:
                         if event == Events.EV3:
-                            self.state = await self.state.transition_to(self.state_BB, self.action)
+                            self.state = await self.state.transition_to(self.state_BB)
                         elif event == Events.EV4:
-                            self.state = await self.state.transition_to(self.final, self.action)
+                            self.state = await self.state.transition_to(self.final)
                     elif self.state == self.state_BB:
                         if event == Events.EV3:
-                            self.state = await self.state.transition_to(self.final, self.action)
+                            self.state = await self.state.transition_to(self.final)
 
             except CancelledError:
-                pass
+                raise
 
 
 class StateMachine_i(State):
