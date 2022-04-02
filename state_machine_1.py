@@ -16,9 +16,7 @@ class Events:
 
 
 class StateMachine(Machine):
-
-    """Top-level state machine as shown in `state_machine.puml`.
-    """
+    """Top-level state machine as shown in `state_machine.puml`."""
 
     def __init__(self) -> None:
         super().__init__(initial=StateMachine_i())
